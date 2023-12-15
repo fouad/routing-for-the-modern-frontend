@@ -8,8 +8,8 @@ Short talk covering routing for modern frontend applications.
 1. Use the right tool for the job (framework-defined infrastructure)
 1. Reduce wait times with streaming (AI)
 
-- [View slides](https://routing-for-the-modern-frontend.pages.dev)
-- [View slides in Markdown &rarr;](./routing-for-the-modern-frontend.md)
+- [View Slides &rarr;](https://routing-for-the-modern-frontend.pages.dev)
+- [View Markdown &rarr;](./routing-for-the-modern-frontend.md)
 
 **Development**
 
