@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+    <title>Routing for the modern frontend</title>
+    <link rel="shortcut icon" href="./favicon.ico" />
+    <link rel="stylesheet" href="./dist/reset.css" />
+    <link rel="stylesheet" href="./dist/reveal.css" />
+    <link rel="stylesheet" href="./dist/theme/white.css" id="theme" />
+    <link rel="stylesheet" href="./css/highlight/base16/zenburn.css" />
+
+
+  </head>
+  <body>
+    <div class="reveal">
+      <div class="slides"><section  data-markdown><script type="text/template">
+
+# Routing for the modern frontend
+</script></section><section  data-markdown><script type="text/template">
+<div class="text-left">
+
+Hi, I'm Fouad.
+
+Over the last few years, I've worked on ...
+
+- Helping a few million people vote in 2016 with a nonprofit I cofounded + again in 2018 with [Vote.org](https://vote.org)
+- Building new customer data products and supporting open source at [Segment](https://segment.com)
+
+Now, I run a security company: [Indent.com](https://indent.com)
+
+</div>
+</script></section><section  data-markdown><script type="text/template">
+![Indent](assets/indent.png)
+</script></section><section  data-markdown><script type="text/template">
+<div class="text-6xl">Before we talk about modern routing, let's talk about how we got here.</div>
+</script></section><section  data-markdown><script type="text/template">
+<div class="text-left">
+
+In 2018, we worked with brands to help their users...
+
+- Check their voter registration
+- Find their polling place
+- Preview their ballot
+
+We gave partners a one-line snippet they could embed.
+
+</div>
+</script></section><section  data-markdown><script type="text/template">
+![Embed](assets/embed.png)
+</script></section><section  data-markdown><script type="text/template">
+## User Request Lifecycle
+
+```js
+(User) → (Partner Website) ↔ [Embed JS]
+                                        → [Config API]
+                                        → [Next.js Server]
+```
+
+<style>
+.center-code .hljs {
+  text-align: center;
+}
+</style>
+</script></section><section  data-markdown><script type="text/template">
+<div class="text-left">
+
+Our goals were:
+
+- 200ms response times across US
+- Personalized regional content<br />_(e.g. 23 days left to register in SF)_
+
+It needed to be fast, secure, and reliable.
+
+</div>
+</script></section><section  data-markdown><script type="text/template">
+## Zeit (aka Vercel) Day 2018
+
+[![Zeit Day](assets/zeit-day.jpg)](https://www.youtube.com/watch?v=5CzOYDF0Hdk)
+</script></section><section  data-markdown><script type="text/template">
+![Architecture](assets/arch.png)
+</script></section><section  data-markdown><script type="text/template">
+## 2018 Architecture
+
+- Cloudflare workers for complex cache logic
+- Nginx for high-throughput HTTP routing
+- Go to serve embed JS
+- Next.js for rendering server
+  - Replace React with Inferno
+  - Drop JS bundle if not needed
+</script></section><section  data-markdown><script type="text/template">
+<div class="text-left">
+
+**Fun moment:** A few days before the election, we started to see a sustained traffic spike.
+
+- 3pm - 5k concurrent
+- 4pm - 20k concurrent
+- 5pm - 30k concurrent (What is going on!?)
+- 6pm - 50k concurrent (Oh no, we're going to crash)
+- 7pm - Google Analytics realtime dashboard crashed
+
+</div>
+</script></section><section  data-markdown><script type="text/template">
+![Beyoncé post](assets/beyonce.png)
+</script></section><section  data-markdown><script type="text/template">
+## How did it go?
+
+- Peaked at 85k concurrent users on Election Day
+- Helped 3.3 million find their polling place
+- Around 1.1 million previewed their ballot
+</script></section><section  data-markdown><script type="text/template">
+## What's new in 2024?
+
+- Framework-defined infrastructure
+- Powerful compute at the edge
+- Streaming is critical for AI features
+</script></section><section  data-markdown><script type="text/template">
+### Front door for <br /> Framework-defined infrastructure
+
+- Marketing — indent.com — Next.js (Vercel)
+- Docs — indent.com/docs — Docusaurus (Vercel)
+- App — indent.com/home — Next.js (self-hosted)
+</script></section><section  data-markdown><script type="text/template">
+### Routing at the edge
+
+In order to share one root domain across multiple frameworks, we handle routing at the edge:
+
+```js
+addEventListener('fetch', event =>
+  event.respondWith(handleRequest(event))
+)
+
+async function handleRequest(event) {
+  try {
+    if (event.request.method === 'GET') {
+      let response = await serveAsset(event)
+
+      return await addSecurityHeaders(response)
+    }
+
+    ...
+```
+</script></section><section  data-markdown><script type="text/template">
+Adding asset prefix for the framework:
+
+```js
+/** @type {import('next').NextConfig} */
+const isProd = process.env.NODE_ENV === 'production'
+const assetUrl = process.env.VERCEL_URL || 'my.vercel.app'
+const assetPrefix = isProd ? `https://${assetUrl}` : ''
+
+module.exports = {
+  assetPrefix,
+
+  ...
+}
+```
+</script></section><section  data-markdown><script type="text/template">
+<div class="-mt-8 h-[90vh] tall-code">
+
+```js
+async function serveAsset(event) {
+  const url = new URL(event.request.url)
+  let { pathname, search } = url
+  let cache = caches.default
+  let response = await cache.match(event.request)
+
+  if (response && response.status < 400) {
+    return response
+  }
+
+  if (shouldServeDashboard(pathname)) {
+    // Remove assetPrefix for dashboard Next.js App
+  } else if (shouldServeDocs(pathname)) {
+    // Remove assetPrefix for docs Docsaurus 2.0 site
+  } else {
+    // Serve marketing Next.js App
+  }
+
+  if (response.status < 400) {
+    const res = response.clone()
+    event.waitUntil(cache.put(event.request, res))
+  }
+
+  return response
+}
+```
+
+</div>
+
+<style>
+.tall-code .code-wrapper {
+  height: 100%;
+  font-size: 21px;
+}
+</style>
+</script></section><section  data-markdown><script type="text/template">
+<div class="relative z-10">
+
+**Share context across frameworks**
+
+</div>
+
+<div class="-mt-20 relative -z-1">
+
+![API Key](./assets/api-key.png)
+
+</div>
+</script></section><section  data-markdown><script type="text/template">
+<div class="relative z-10">
+
+**Streaming for AI features** (Cloudflare)
+
+</div>
+
+<div class="-mt-4 relative -z-1 h-[65vh] tall-code">
+
+```js
+import { Ai } from '@cloudflare/ai'
+
+export default {
+  async fetch(request, env, ctx) {
+    const ai = new Ai(env.AI, { sessionOptions: { ctx: ctx } })
+    const stream = await ai.run(
+      '@cf/meta/llama-2-7b-chat-int8',
+      {
+        prompt: 'Where is new york?',
+        stream: true,
+      }
+    )
+    return new Response(stream, {
+      headers: { 'content-type': 'text/event-stream' },
+    })
+  },
+}
+```
+
+</div>
+</script></section><section  data-markdown><script type="text/template">
+**Streaming for AI features** (Vercel)
+
+<div class="center-code">
+
+```shell
+npm i ai
+```
+
+</div>
+
+```js
+import { OpenAIStream, StreamingTextResponse } from 'ai'
+import { Configuration, OpenAIApi } from 'openai-edge'
+
+// Create an OpenAI API client (that's edge friendly!)
+const config = new Configuration({
+  apiKey: process.env.OPENAI_API_KEY
+})
+const openai = new OpenAIApi(config)
+ 
+// IMPORTANT! Set the runtime to edge
+export const runtime = 'edge'
+ 
+export async function POST(req: Request) {
+  // Extract the `messages` from the body of the request
+  const { messages } = await req.json()
+ 
+  // Ask OpenAI for a streaming chat completion given the prompt
+  const response = await openai.createChatCompletion({
+    model: 'gpt-3.5-turbo',
+    stream: true,
+    messages
+  })
+  // Convert the response into a friendly text-stream
+  const stream = OpenAIStream(response)
+  // Respond with the stream
+  return new StreamingTextResponse(stream)
+}
+```
+</script></section><section  data-markdown><script type="text/template">
+## Takeaways
+
+1. Handle requests close to your users (edge)
+1. Use the right tool for the job (frameworks)
+1. Reduce wait times with streaming (AI)
+
+Questions? [@fouadmatin](https://x.com/fouadmatin)
+
+Interested in better security?<br />
+Check out [indent.com](https://indent.com)
+</script></section></div>
+    </div>
+
+    <script src="./dist/reveal.js"></script>
+
+    <script src="./plugin/markdown/markdown.js"></script>
+    <script src="./plugin/highlight/highlight.js"></script>
+    <script src="./plugin/zoom/zoom.js"></script>
+    <script src="./plugin/notes/notes.js"></script>
+    <script src="./plugin/math/math.js"></script>
+    <script>
+      function extend() {
+        var target = {};
+        for (var i = 0; i < arguments.length; i++) {
+          var source = arguments[i];
+          for (var key in source) {
+            if (source.hasOwnProperty(key)) {
+              target[key] = source[key];
+            }
+          }
+        }
+        return target;
+      }
+
+      // default options to init reveal.js
+      var defaultOptions = {
+        controls: true,
+        progress: true,
+        history: true,
+        center: true,
+        transition: 'default', // none/fade/slide/convex/concave/zoom
+        slideNumber: true,
+        plugins: [
+          RevealMarkdown,
+          RevealHighlight,
+          RevealZoom,
+          RevealNotes,
+          RevealMath
+        ]
+      };
+
+      // options from URL query string
+      var queryOptions = Reveal().getQueryHash() || {};
+
+      var options = extend(defaultOptions, {"transition":"slide"}, queryOptions);
+    </script>
+
+    <script src="https://cdn.tailwindcss.com/3.3.5"></script>
+
+    <script>
+      Reveal.initialize(options);
+    </script>
+  </body>
+</html>
